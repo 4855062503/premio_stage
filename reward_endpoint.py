@@ -47,6 +47,7 @@ def reward_categories():
         return bad_request(auth_fail_reason)
     if not api_key.user.has_role(Role.ROLE_ADMIN) and not api_key.user.has_role(Role.ROLE_AUTHORIZER):
         return bad_request(web_utils.UNAUTHORIZED)
+    # pylint: disable=no-member
     cats = db.session.query(Category).all()
     cats = [cat.name for cat in cats]
     return jsonify(dict(categories=cats))
@@ -69,6 +70,8 @@ def reward_create():
     cat = Category.from_name(db.session, category)
     if not cat:
         return bad_request(web_utils.INVALID_CATEGORY)
+    if amount <= 0:
+        return bad_request(web_utils.INVALID_AMOUNT)
     proposal, payment = _reward_create(api_key.user, reason, cat, recipient, amount, message)
     db.session.commit()
     return jsonify(dict(proposal=dict(reason=reason, category=category, status=proposal.status, payment=dict(amount=amount, email=payment.email, mobile=payment.mobile, address=payment.recipient, message=message, status=payment.status))))
@@ -77,7 +80,7 @@ def reward_create():
 def referral_config():
     if not use_referrals:
         return bad_request(web_utils.NOT_AVAILABLE)
-    api_key, err_response = auth_request(db)
+    _, err_response = auth_request(db)
     if err_response:
         return err_response
     reward_sender_type = app.config["REFERRAL_REWARD_TYPE_SENDER"]
@@ -173,6 +176,10 @@ def referral_claim():
     category = Category.from_name(db.session, Category.CATEGORY_REFERRAL)
     if not category:
         return bad_request(web_utils.INVALID_CATEGORY)
+    if ref.reward_sender <= 0:
+        return bad_request(web_utils.INVALID_AMOUNT)
+    if ref.reward_recipient_type == ref.REWARD_TYPE_FIXED and ref.reward_recipient <= 0:
+        return bad_request(web_utils.INVALID_AMOUNT)
     reason = f'{ref.token}: reward for referral'
     _reward_create(api_key.user, reason, category, ref.recipient, ref.reward_sender, 'Thank you for referring a friend')
     if ref.reward_recipient_type == ref.REWARD_TYPE_FIXED:

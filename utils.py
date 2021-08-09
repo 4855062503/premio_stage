@@ -3,8 +3,6 @@ import binascii
 import re
 import io
 import hashlib
-import logging
-from importlib.metadata import version
 import decimal
 import base64
 
@@ -19,8 +17,10 @@ import qrcode.image.pil
 from app_core import app
 
 def int2asset(num):
-    num = decimal.Decimal(num)
-    return num/100
+    if num is None:
+        return '!ERR!'
+    num = decimal.Decimal(num)/100
+    return '{num:0.2f}'.format(num=num)
 
 def _attachment(b64data, mime_type, filename, content_id, disposition='attachment'):
     attachment = Attachment()
@@ -59,12 +59,6 @@ def email_payment_claim(logger, asset_name, payment, hours_expiry):
     url = url_for("claim_payment", token=payment.token, _external=True)
     msg = f"You have a {asset_name} payment waiting!<br/><br/>Claim your payment <a href='{url}'>here</a><br/><br/>Claim within {hours_expiry} hours"
     send_email(logger, f"Claim your {asset_name} payment", msg, payment.email)
-
-def email_payment_sent(logger, asset_name, payment):
-    amount = int2asset(payment.amount)
-    asset_name = app.config["ASSET_NAME"]
-    msg = f"You have been sent a {asset_name} payment of {amount} {asset_name}!<br/><br/>Message: {payment.message}"
-    send_email(logger, f"Received {asset_name} payment", msg, payment.email)
 
 def email_user_create_request(logger, req, minutes_expiry):
     url = url_for("paydb.user_registration_confirm", token=req.token, _external=True)
@@ -166,18 +160,3 @@ def sha256(string):
     data = str2bytes(string)
     raw_hash = hashlib.sha256(data).digest()
     return binascii.hexlify(raw_hash).decode()
-
-def log_socketio_version(logger):
-    logger.info('python-socketio version: %s', version('python-socketio'))
-    logger.info('python-engineio version: %s', version('python-engineio'))
-
-def setup_logging(logger, level):
-    # setup logging
-    logger.setLevel(level)
-    ch = logging.StreamHandler()
-    ch.setLevel(level)
-    ch.setFormatter(logging.Formatter('[%(name)s %(levelname)s] %(message)s'))
-    logger.addHandler(ch)
-    # clear loggers set by any imported modules
-    logging.getLogger().handlers.clear()
-    return ch

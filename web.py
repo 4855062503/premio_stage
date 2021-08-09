@@ -192,19 +192,15 @@ def process_proposals():
         emails = 0
         sms_messages = 0
         proposals = Proposal.in_status(db.session, Proposal.STATE_AUTHORIZED)
+        # pylint: disable=too-many-nested-blocks
         for proposal in proposals:
             for payment in proposal.payments:
                 if payment.status == payment.STATE_CREATED:
                     if payment.email:
-                        if SERVER_MODE == SERVER_MODE_PAYDB and User.from_email(db.session, payment.email):
-                            if _process_claim_paydb(payment, payment.email):
-                                utils.email_payment_sent(logger, app.config["ASSET_NAME"], payment)
-                                logger.info("Sent payment to %s", payment.email)
-                        else:
-                            utils.email_payment_claim(logger, app.config["ASSET_NAME"], payment, proposal.HOURS_EXPIRY)
-                            payment.status = payment.STATE_SENT_CLAIM_LINK
-                            db.session.add(payment)
-                            logger.info("Sent payment claim url to %s", payment.email)
+                        utils.email_payment_claim(logger, app.config["ASSET_NAME"], payment, proposal.HOURS_EXPIRY)
+                        payment.status = payment.STATE_SENT_CLAIM_LINK
+                        db.session.add(payment)
+                        logger.info("Sent payment claim url to %s", payment.email)
                         emails += 1
                     elif payment.mobile:
                         utils.sms_payment_claim(logger, app.config["ASSET_NAME"], payment, proposal.HOURS_EXPIRY)
@@ -360,14 +356,14 @@ def payment_create():
 def dashboard():
     if SERVER_MODE == SERVER_MODE_WAVES:
         data = dashboard_data_waves()
-        data["asset_balance"] = from_int_to_user_friendly(data["asset_balance"], 100)
+        data["asset_balance"] = int2asset(data["asset_balance"])
         data["waves_balance"] = from_int_to_user_friendly(data["waves_balance"], 10**8)
-        data["master_asset_balance"] = from_int_to_user_friendly(data["master_asset_balance"], 100)
+        data["master_asset_balance"] = int2asset(data["master_asset_balance"])
         data["master_waves_balance"] = from_int_to_user_friendly(data["master_waves_balance"], 10**8)
         return render_template("dashboard_waves.html", data=data)
     data = dashboard_data_paydb()
-    data["premio_stage_balance"] = from_int_to_user_friendly(data["premio_stage_balance"], 100)
-    data["total_balance"] = from_int_to_user_friendly(data["total_balance"], 100)
+    data["premio_stage_balance"] = int2asset(data["premio_stage_balance"])
+    data["total_balance"] = int2asset(data["total_balance"])
     return render_template("dashboard_paydb.html", data=data)
 
 # https://gis.stackexchange.com/a/2964
