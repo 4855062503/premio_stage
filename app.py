@@ -15,12 +15,11 @@ import log_utils
 from app_core import MISSING_VITAL_SETTING, app, db
 from models import user_datastore, User, Role, Category, Permission, Topic
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger() # root log handler
 
 def teardown_logging():
     # fix this bug: https://bugs.python.org/issue21149
     logger.handlers.clear()
-    web.logger_clear()
 
 def add_user(email, password):
     email = email.lower()
@@ -99,15 +98,15 @@ def g_exception(greenlet):
 KEEP_RUNNING = True
 if __name__ == "__main__":
     ch = log_utils.setup_logging(logger, logging.DEBUG)
-    web.logger_setup(logging.DEBUG, ch)
     log_utils.log_socketio_version(logger)
 
     # create tables
     db.create_all()
     create_role(Role.ROLE_ADMIN, "super user")
-    create_role(Role.ROLE_PROPOSER, "Can propose payments")
-    create_role(Role.ROLE_AUTHORIZER, "Can authorize payments")
+    create_role(Role.ROLE_FINANCE, "Can view all records, can authorize rewards")
+    create_role(Role.ROLE_PROPOSER, "Can propose rewards")
     create_role(Role.ROLE_REFERRAL_CLAIMER, "Can claim referrals")
+    create_role(Role.ROLE_USER, "Normal user")
     create_permission(Permission.PERMISSION_RECIEVE, "view account name")
     create_permission(Permission.PERMISSION_BALANCE, "view account balance")
     create_permission(Permission.PERMISSION_HISTORY, "view account history")

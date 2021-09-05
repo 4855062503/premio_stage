@@ -95,10 +95,25 @@ if os.getenv("REFERRAL_SPEND_ASSET"):
 else:
     app.config["REFERRAL_SPEND_ASSET"] = "NZD"
 
+if os.getenv("OPERATIONS_ACCOUNT_MIN_BALANCE_CENTS"):
+    app.config["OPERATIONS_ACCOUNT_MIN_BALANCE_CENTS"] = os.getenv("OPERATIONS_ACCOUNT_MIN_BALANCE_CENTS")
+else:
+    app.config["OPERATIONS_ACCOUNT_MIN_BALANCE_CENTS"] = 200000
+
 if os.getenv("USE_STASH"):
     app.config["USE_STASH"] = True
 else:
     app.config["USE_STASH"] = False
+
+if os.getenv("USE_PUSH_NOTIFICATION"):
+    app.config["USE_PUSH_NOTIFICATION"] = True
+else:
+    app.config["USE_PUSH_NOTIFICATION"] = False
+
+if os.getenv("SHOW_USER_REGISTRATION"):
+    app.config["SHOW_USER_REGISTRATION"] = True
+else:
+    app.config["SHOW_USER_REGISTRATION"] = False
 
 def set_vital_setting(env_name, setting_name=None, acceptable_values=None):
     # pylint: disable=global-statement

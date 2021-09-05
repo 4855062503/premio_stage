@@ -12,7 +12,7 @@ from flask_security.recoverable import send_reset_password_instructions
 from flask_socketio import Namespace, emit, join_room, leave_room
 
 import web_utils
-from web_utils import bad_request, get_json_params, request_get_signature, check_auth, auth_request, auth_request_get_single_param
+from web_utils import bad_request, get_json_params, check_auth, auth_request, auth_request_get_single_param, auth_request_get_params
 import utils
 from app_core import db, socketio, limiter
 from models import user_datastore, User, UserCreateRequest, UserUpdateEmailRequest, Permission, ApiKey, ApiKeyRequest, PayDbTransaction
@@ -44,6 +44,21 @@ class PayDbNamespace(Namespace):
         logger.info("connect sid: %s", request.sid)
 
     def on_auth(self, auth):
+        if not isinstance(auth, dict):
+            try:
+                auth = json.loads(auth)
+            except: # pylint: disable=bare-except
+                emit("info", "invalid json", namespace=NS)
+                return
+        if "api_key" not in auth:
+            emit("info", "'api_key' param missing", namespace=NS)
+            return
+        if "nonce" not in auth:
+            emit("info", "'nonce' param missing", namespace=NS)
+            return
+        if "signature" not in auth:
+            emit("info", "'signature' param missing", namespace=NS)
+            return
         # check auth
         res, reason, api_key = check_auth(db.session, auth["api_key"], auth["nonce"], auth["signature"], str(auth["nonce"]))
         if res:
@@ -54,7 +69,9 @@ class PayDbNamespace(Namespace):
             # store sid -> email map
             ws_sids[request.sid] = api_key.user.email
         else:
-            logger.info("failed authentication (%s): %s", auth["api_key"], reason)
+            api_key = auth["api_key"]
+            emit("info", f"failed authentication ({api_key}): {reason}", namespace=NS)
+            logger.info("failed authentication (%s): %s", api_key, reason)
 
     def on_disconnect(self):
         logger.info("disconnect sid: %s", request.sid)
@@ -309,17 +326,10 @@ def user_update_email_confirm(token=None):
 @paydb.route('/user_update_password', methods=['POST'])
 @limiter.limit('10/hour')
 def user_update_password():
-    sig = request_get_signature()
-    content = request.get_json(force=True)
-    if content is None:
-        return bad_request(web_utils.INVALID_JSON)
-    params, err_response = get_json_params(content, ["api_key", "nonce", "current_password", "new_password"])
+    params, api_key, err_response = auth_request_get_params(db, ["current_password", "new_password"])
     if err_response:
         return err_response
-    api_key, nonce, current_password, new_password = params
-    res, reason, api_key = check_auth(db.session, api_key, nonce, sig, request.data)
-    if not res:
-        return bad_request(reason)
+    current_password, new_password = params
     user = api_key.user
     verified_password = verify_password(current_password, user.password)
     if not verified_password:
@@ -333,17 +343,10 @@ def user_update_password():
 @paydb.route('/user_update_photo', methods=['POST'])
 @limiter.limit('10/hour')
 def user_update_photo():
-    sig = request_get_signature()
-    content = request.get_json(force=True)
-    if content is None:
-        return bad_request(web_utils.INVALID_JSON)
-    params, err_response = get_json_params(content, ["api_key", "nonce", "photo", "photo_type"])
+    params, api_key, err_response = auth_request_get_params(db, ["photo", "photo_type"])
     if err_response:
         return err_response
-    api_key, nonce, photo, photo_type = params
-    res, reason, api_key = check_auth(db.session, api_key, nonce, sig, request.data)
-    if not res:
-        return bad_request(reason)
+    photo, photo_type = params
     user = api_key.user
     user.photo = photo
     user.photo_type = photo_type
@@ -353,19 +356,12 @@ def user_update_photo():
 
 @paydb.route('/user_transactions', methods=['POST'])
 def user_transactions():
-    sig = request_get_signature()
-    content = request.get_json(force=True)
-    if content is None:
-        return bad_request(web_utils.INVALID_JSON)
-    params, err_response = get_json_params(content, ["api_key", "nonce", "offset", "limit"])
+    params, api_key, err_response = auth_request_get_params(db, ["offset", "limit"])
     if err_response:
         return err_response
-    api_key, nonce, offset, limit = params
+    offset, limit = params
     if limit > 1000:
         return bad_request(web_utils.LIMIT_TOO_LARGE)
-    res, reason, api_key = check_auth(db.session, api_key, nonce, sig, request.data)
-    if not res:
-        return bad_request(reason)
     if not api_key.has_permission(Permission.PERMISSION_HISTORY):
         return bad_request(web_utils.UNAUTHORIZED)
     txs = PayDbTransaction.related_to_user(db.session, api_key.user, offset, limit)
@@ -374,17 +370,12 @@ def user_transactions():
 
 @paydb.route('/transaction_create', methods=['POST'])
 def transaction_create():
-    sig = request_get_signature()
-    content = request.get_json(force=True)
-    if content is None:
-        return bad_request(web_utils.INVALID_JSON)
-    params, err_response = get_json_params(content, ["api_key", "nonce", "action", "recipient", "amount", "attachment"])
+    params, api_key, err_response = auth_request_get_params(db, ["action", "recipient", "amount", "attachment"])
     if err_response:
         return err_response
-    api_key, nonce, action, recipient, amount, attachment = params
-    res, reason, api_key = check_auth(db.session, api_key, nonce, sig, request.data)
-    if not res:
-        return bad_request(reason)
+    action, recipient, amount, attachment = params
+    if recipient:
+        recipient = recipient.lower()
     tx, error = paydb_core.tx_create_and_play(db.session, api_key, action, recipient, amount, attachment)
     if not tx:
         return bad_request(error)

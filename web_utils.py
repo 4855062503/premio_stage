@@ -68,7 +68,7 @@ def request_get_signature():
     return request.headers.get('X-Signature')
 
 def check_hmac_auth(api_key, nonce, sig, body):
-    if nonce <= api_key.nonce:
+    if int(nonce) <= int(api_key.nonce):
         return False, OLD_NONCE
     our_sig = create_hmac_sig(api_key.secret, body)
     if sig == our_sig:
@@ -122,3 +122,17 @@ def auth_request_get_single_param(db, param_name):
     if not res:
         return None, None, bad_request(reason)
     return param, api_key, None
+
+def auth_request_get_params(db, param_names):
+    sig = request_get_signature()
+    content = request.get_json(force=True)
+    if content is None:
+        return None, None, bad_request(INVALID_JSON)
+    params, err_response = get_json_params(content, ["api_key", "nonce"] + param_names)
+    if err_response:
+        return None, None, err_response
+    api_key, nonce, *_ = params
+    res, reason, api_key = check_auth(db.session, api_key, nonce, sig, request.data)
+    if not res:
+        return None, None, bad_request(reason)
+    return params[2:], api_key, None
